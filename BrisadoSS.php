@@ -140,7 +140,7 @@ function verificarRoot(): void
     system("adb bugreport $zipFile");
 
     if (!file_exists($zipFile)) {
-        erro("Falha ao gerar bugreport.");
+        erro("Falha ao gerar bugreport. ( Recomenda-se aplicar o W.O. ou reembolsar ambos, pois pode haver um possível bypass no bugreport )");
         echo "\n  Pressione Enter para voltar...";
         fgets(STDIN);
         return;

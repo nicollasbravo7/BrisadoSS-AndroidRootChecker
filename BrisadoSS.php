@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Root & Bootloader Detection Scanner for Termux
- * Based on KellerSS ADB System
+ * BrisadoSS - Android Root Checker
+ * Baseado no bugreport e assinaturas de APatch, KernelSU e TrickyStore
  */
 
 const C = [
@@ -59,13 +59,17 @@ function inputUsuario(string $mensagem): void
     echo c('rst', 'bold', 'ciano') . "  ▸ $mensagem: " . c('fverde');
 }
 
-function scannerBanner(): void
+function brisadoBanner(): void
 {
-    echo c('branco') . "
-  " . c('branco') . "Root Detection " . c('ciano') . "BugReport Scanner" . c('branco') . "
-  " . c('cinza') . "Desenvolvido para Termux" . c('branco') . "
-
-  " . c('ciano') . "Baseado no sistema ADB de KellerSS" . rst() . "\n\n";
+    echo c('magenta') . "
+    ____       _                 _      ____ ____  
+   | __ ) _ __(_)___  __ _  __| | ___/ ___/ ___| 
+   |  _ \| '__| / __|/ _` |/ _` |/ _ \___ \___ \ 
+   | |_) | |  | \__ \ (_| | (_| | (_) |__) |__) |
+   |____/|_|  |_|___/\__,_|\__,_|\___/____/____/ 
+                                                 
+  " . c('branco') . "BrisadoSS Android " . c('magenta') . "Root Checker" . c('branco') . "
+  " . c('cinza') . "github.com/nicollasbravo7" . rst() . "\n\n";
 }
 
 function adb(string $cmd): string
@@ -89,7 +93,7 @@ function dispositivoConectado(): bool
 function conectarADB(): void
 {
     system('clear');
-    scannerBanner();
+    brisadoBanner();
     cabecalho("CONEXÃO ADB");
     
     info("Certifique-se que o Depuração sem Fio está ATIVO.");
@@ -102,7 +106,7 @@ function conectarADB(): void
         return;
     }
 
-    echo c('bold', 'azul') . "\n  → Tentando conectar em localhost:$port...\n" . rst();
+    echo c('bold', 'azul') . "\n  → Conectando em localhost:$port...\n" . rst();
     $res = (string) shell_exec("adb connect localhost:$port 2>&1");
     echo c('cinza') . trim($res) . "\n" . rst();
 
@@ -119,8 +123,8 @@ function conectarADB(): void
 function verificarRoot(): void
 {
     system('clear');
-    scannerBanner();
-    cabecalho("INICIANDO SCAN DE BUGREPORT");
+    brisadoBanner();
+    cabecalho("INICIANDO SCAN AVANÇADO (BUGREPORT)");
 
     if (!dispositivoConectado()) {
         erro("Dispositivo não conectado via ADB!");
@@ -128,13 +132,11 @@ function verificarRoot(): void
         return;
     }
 
-    info("Extraindo bugreport... Isso pode levar alguns segundos.");
-    // adb bugreport gera um arquivo .zip
-    $tmpFile = "bugreport_tmp_" . time();
+    info("Extraindo bugreport... Aguarde alguns instantes.");
+    $tmpFile = "bugreport_scan_" . time();
     $zipFile = "$tmpFile.zip";
     $txtFile = "$tmpFile.txt";
     
-    // Usar adb bugreport com redirecionamento ou arquivo direto
     system("adb bugreport $zipFile");
 
     if (!file_exists($zipFile)) {
@@ -144,35 +146,45 @@ function verificarRoot(): void
         return;
     }
 
-    info("Analisando dados extraídos...");
+    info("Analisando logs do sistema...");
     
-    // Tentar extrair o arquivo principal (geralmente o maior .txt dentro do zip)
-    // No Termux/Linux, podemos usar unzip -p para o stdout e filtrar com grep/php
+    // Extrair o conteúdo para o arquivo de texto
+    system("unzip -p $zipFile > $txtFile");
     
     $deteccoes = [];
     $bootloaderUnlocked = false;
-    $searchStrings = ['Tricky Store', 'kernelsu next', 'kernelsu', 'apatch'];
-
-    // Abrir o arquivo de texto extraído do zip para leitura linha a linha (mais memória-friendly)
-    system("unzip -p $zipFile > $txtFile");
-    $handle = fopen($txtFile, "r");
     
+    // Assinaturas baseadas na análise do seu bugreport
+    $searchStrings = [
+        'TrickyStore' => 'Tricky Store / Keymaster Bypass',
+        'me.bmax.apatch' => 'Pacote APatch Manager',
+        '/data/adb/ap/' => 'Binários APatch',
+        '/data/adb/modules/apatch_helper' => 'Módulo APatch Helper',
+        '/data/adb/modules/tricky_store' => 'Módulo Tricky Store',
+        'kernelsu' => 'KernelSU (KSU)',
+        'aphd' => 'APatch Daemon (aphd)',
+        'busybox' => 'BusyBox (Possível Root)'
+    ];
+
+    $handle = fopen($txtFile, "r");
     if ($handle) {
         while (($line = fgets($handle)) !== false) {
-            // Regra crucial: Ignorar ActivityTaskManager
+            // Regra crucial: Ignorar ActivityTaskManager (evita falso positivo de apps apenas instalados)
             if (stripos($line, 'ActivityTaskManager') !== false) continue;
 
-            // Verificar Bootloader Unlocked
-            if (stripos($line, 'ro.boot.flash.locked=0') !== false || 
-                stripos($line, 'ro.boot.verifiedbootstate=orange') !== false ||
-                stripos($line, 'ro.boot.verifiedbootstate=yellow') !== false) {
+            // Verificação de Bootloader Unlocked (Propriedades do sistema)
+            // ro.boot.bl_state: 2 geralmente significa unlocked em alguns dispositivos (como o seu miami_g)
+            if (stripos($line, '[ro.boot.flash.locked]: [0]') !== false || 
+                stripos($line, '[ro.boot.verifiedbootstate]: [orange]') !== false ||
+                stripos($line, '[ro.boot.verifiedbootstate]: [yellow]') !== false ||
+                stripos($line, '[ro.boot.bl_state]: [2]') !== false) {
                 $bootloaderUnlocked = true;
             }
 
-            // Verificar Strings Específicas
-            foreach ($searchStrings as $s) {
-                if (stripos($line, $s) !== false) {
-                    $deteccoes[$s][] = trim($line);
+            // Busca por assinaturas
+            foreach ($searchStrings as $key => $desc) {
+                if (stripos($line, $key) !== false) {
+                    $deteccoes[$desc][] = trim($line);
                 }
             }
         }
@@ -184,20 +196,24 @@ function verificarRoot(): void
     if ($bootloaderUnlocked) {
         erro("BOOTLOADER: DESBLOQUEADO (UNLOCKED) DETECTADO!");
     } else {
-        ok("Bootloader: Parece estar bloqueado.");
+        ok("Bootloader: Parece estar bloqueado ou seguro.");
     }
 
-    foreach ($searchStrings as $s) {
-        if (isset($deteccoes[$s])) {
-            erro("ROOT/BYPASS DETECTADO: [$s]");
-            // Mostrar apenas as primeiras 3 ocorrências para não poluir
+    $encontrouAlgo = false;
+    foreach ($searchStrings as $key => $desc) {
+        if (isset($deteccoes[$desc])) {
+            erro("ROOT/BYPASS DETECTADO: [$desc]");
+            $encontrouAlgo = true;
+            // Mostrar até 2 exemplos
             $count = 0;
-            foreach ($deteccoes[$s] as $occ) {
-                if ($count++ < 3) echo c('cinza') . "    > $occ\n" . rst();
+            foreach ($deteccoes[$desc] as $occ) {
+                if ($count++ < 2) echo c('cinza') . "    > " . substr($occ, 0, 80) . "...\n" . rst();
             }
-        } else {
-            ok("Nenhum sinal de: $s");
         }
+    }
+
+    if (!$encontrouAlgo) {
+        ok("Nenhuma assinatura de Root conhecida encontrada nos logs.");
     }
 
     // Limpeza
@@ -208,25 +224,9 @@ function verificarRoot(): void
     fgets(STDIN);
 }
 
-function exibirMenu(): void
-{
-    $status = dispositivoConectado() 
-        ? c('bold', 'verde') . '● Conectado' . rst() 
-        : c('bold', 'vermelho') . '○ Desconectado' . rst();
-
-    echo c('bold', 'azul') . "  ╔══════════════════════════╗\n";
-    echo c('bold', 'azul') . "  ║      ROOT SCANNER ADB    ║\n";
-    echo c('bold', 'azul') . "  ╚══════════════════════════╝\n\n";
-    
-    echo "  Status ADB: $status\n\n";
-    echo c('amarelo') . "  [0] " . c('branco') . "CONECTAR ADB (Porta)\n" . rst();
-    echo c('verde')   . "  [1] " . c('branco') . "VERIFICAR ROOT (BugReport)\n" . rst();
-    echo c('vermelho'). "  [S] " . c('branco') . "SAIR\n\n" . rst();
-}
-
 // Loop Principal
 system('clear');
-scannerBanner();
+brisadoBanner();
 
 while (true) {
     exibirMenu();
@@ -237,12 +237,12 @@ while (true) {
         case '0':
             conectarADB();
             system('clear');
-            scannerBanner();
+            brisadoBanner();
             break;
         case '1':
             verificarRoot();
             system('clear');
-            scannerBanner();
+            brisadoBanner();
             break;
         case 'S':
             echo "\n  Saindo...\n\n";
@@ -251,7 +251,23 @@ while (true) {
             erro("Opção inválida!");
             sleep(1);
             system('clear');
-            scannerBanner();
+            brisadoBanner();
             break;
     }
+}
+
+function exibirMenu(): void
+{
+    $status = dispositivoConectado() 
+        ? c('bold', 'verde') . '● Conectado' . rst() 
+        : c('bold', 'vermelho') . '○ Desconectado' . rst();
+
+    echo c('bold', 'magenta') . "  ╔══════════════════════════╗\n";
+    echo c('bold', 'magenta') . "  ║      BRISADO ROOT SCAN   ║\n";
+    echo c('bold', 'magenta') . "  ╚══════════════════════════╝\n\n";
+    
+    echo "  Status ADB: $status\n\n";
+    echo c('amarelo') . "  [0] " . c('branco') . "CONECTAR ADB\n" . rst();
+    echo c('verde')   . "  [1] " . c('branco') . "VERIFICAR ROOT (BugReport)\n" . rst();
+    echo c('vermelho'). "  [S] " . c('branco') . "SAIR\n\n" . rst();
 }

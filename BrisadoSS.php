@@ -174,9 +174,12 @@ function verificarRoot(): void
 
             // Verificação de Bootloader Unlocked (Propriedades do sistema)
             // ro.boot.bl_state: 2 geralmente significa unlocked em alguns dispositivos (como o seu miami_g)
-            if (stripos($line, '[ro.boot.flash.locked]: [0]') !== false || 
+            if (stripos($line, '[ro.boot.flash.locked]: [0]') !== false ||  
                 stripos($line, '[ro.boot.verifiedbootstate]: [orange]') !== false ||
                 stripos($line, '[ro.boot.verifiedbootstate]: [yellow]') !== false ||
+                stripos($line, 'androidboot.verifiedbootstate: [orange]') !== false ||
+                stripos($line, 'androidboot.vbmeta.device_state: [unlocked]') !== false ||
+                stripos($line, 'androidboot.bl_state: [2]') !== false ||
                 stripos($line, '[ro.boot.bl_state]: [2]') !== false) {
                 $bootloaderUnlocked = true;
             }

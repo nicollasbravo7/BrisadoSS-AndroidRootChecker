@@ -177,9 +177,6 @@ function verificarRoot(): void
             if (stripos($line, '[ro.boot.flash.locked]: [0]') !== false ||  
                 stripos($line, '[ro.boot.verifiedbootstate]: [orange]') !== false ||
                 stripos($line, '[ro.boot.verifiedbootstate]: [yellow]') !== false ||
-                stripos($line, 'androidboot.verifiedbootstate: [orange]') !== false ||
-                stripos($line, 'androidboot.vbmeta.device_state: [unlocked]') !== false ||
-                stripos($line, 'androidboot.bl_state: [2]') !== false ||
                 stripos($line, '[ro.boot.bl_state]: [2]') !== false) {
                 $bootloaderUnlocked = true;
             }
